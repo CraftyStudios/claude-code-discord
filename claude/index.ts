@@ -1,6 +1,6 @@
 // Claude Code integration exports
-export { claudeCommands, createClaudeHandlers } from "./command.ts";
-export type { SessionThreadCallbacks } from "./command.ts";
+export { claudeCommands, createClaudeHandlers, buildForumPrompt } from "./command.ts";
+export type { SessionThreadCallbacks, ForumPostContext, ForumPostFetcher } from "./command.ts";
 export { cleanSessionId, sendToClaudeCode } from "./client.ts";
 export type { ClaudeModelOptions, SDKPermissionMode, ThinkingConfig, EffortLevel, SDKAgentDefinition, SDKModelInfo } from "./client.ts";
 export { createClaudeSender, expandableContent } from "./discord-sender.ts";

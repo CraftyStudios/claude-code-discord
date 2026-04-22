@@ -228,6 +228,16 @@ export async function createDiscordBot(
         return null;
       },
 
+      getChannelOption(name: string, required?: boolean): { id: string; name?: string } | null {
+        if (interaction.isCommand && interaction.isCommand()) {
+          // deno-lint-ignore no-explicit-any
+          const channel = (interaction as any).options.getChannel(name, required ?? false);
+          if (!channel) return null;
+          return { id: channel.id, name: channel.name };
+        }
+        return null;
+      },
+
       getMemberRoleIds(): Set<string> {
         const member = interaction.member;
         if (member && 'roles' in member && member.roles && 'cache' in member.roles) {
@@ -492,20 +502,12 @@ export async function createDiscordBot(
     }
   }
 
-  // Register commands
+  // Register commands — register per-guild (instant propagation) after login.
+  // Global registration can take up to an hour to appear in the Discord UI,
+  // which makes iterating on new commands painful. Per-guild registration is
+  // instant and appropriate here since each bot instance binds to one guild.
   const rest = new REST({ version: '10' }).setToken(discordToken);
-
-  try {
-    console.log('Registering slash commands...');
-    await rest.put(
-      Routes.applicationCommands(applicationId),
-      { body: commands.map(cmd => cmd.toJSON()) },
-    );
-    console.log('Slash commands registered');
-  } catch (error) {
-    console.error('Failed to register slash commands:', error);
-    throw error;
-  }
+  const commandBodies = commands.map(cmd => cmd.toJSON());
 
   // Event handlers
   client.once(Events.ClientReady, async () => {
@@ -524,6 +526,30 @@ export async function createDiscordBot(
     if (!guild) {
       console.error('Error: Guild not found');
       return;
+    }
+
+    // Register commands to every guild the bot is in. Per-guild commands
+    // appear in the Discord UI instantly, unlike global commands which can
+    // lag up to an hour.
+    for (const [guildId, g] of guilds) {
+      try {
+        console.log(`Registering ${commandBodies.length} slash commands to guild "${g.name}" (${guildId})...`);
+        await rest.put(
+          Routes.applicationGuildCommands(applicationId, guildId),
+          { body: commandBodies },
+        );
+        console.log(`✓ Slash commands registered to "${g.name}"`);
+      } catch (error) {
+        console.error(`Failed to register slash commands to guild ${guildId}:`, error);
+      }
+    }
+
+    // Clear any lingering global commands so users don't see stale/duplicate
+    // entries alongside the per-guild ones. Best-effort — not fatal on error.
+    try {
+      await rest.put(Routes.applicationCommands(applicationId), { body: [] });
+    } catch (error) {
+      console.warn('Could not clear global commands (non-fatal):', error);
     }
 
     try {

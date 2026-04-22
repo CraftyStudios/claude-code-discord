@@ -304,6 +304,21 @@ export function createClaudeCommandHandlers(
         await claudeHandlers.onClaudeThread(ctx, prompt, threadName);
       }
     }],
+    ['claude-forum', {
+      execute: async (ctx: InteractionContext) => {
+        const forumPost = ctx.getChannelOption('forum_post', true);
+        if (!forumPost) {
+          await ctx.reply({
+            content: 'forum_post is required',
+            ephemeral: true,
+          });
+          return;
+        }
+        const clarification = ctx.getString('clarification') || undefined;
+        if (clarification) addToHistory(clarification);
+        await claudeHandlers.onClaudeForum(ctx, forumPost.id, forumPost.name, clarification);
+      }
+    }],
     ['resume', {
       execute: async (ctx: InteractionContext) => {
         const prompt = ctx.getString('prompt');

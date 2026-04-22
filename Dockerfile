@@ -36,8 +36,11 @@ COPY . .
 # Remove lockfile if present (avoid version conflicts)
 RUN rm -f deno.lock
 
-# Initialize git repo in container (for non-git workspaces)
-RUN git init && git config user.email "bot@claude.local" && git config user.name "Claude Bot"
+# Initialize git repo in container (for non-git workspaces).
+# Remove any stray .git pointer first — when building from a git worktree, the
+# host's .git is a file pointing at the main repo's worktree metadata, which
+# doesn't exist inside the container and would break `git init`.
+RUN rm -rf .git && git init && git config user.email "bot@claude.local" && git config user.name "Claude Bot"
 
 # Pre-compile Deno dependencies
 RUN deno cache --no-lock index.ts

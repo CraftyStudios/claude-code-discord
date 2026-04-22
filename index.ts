@@ -22,7 +22,7 @@ import {
 import type { TextChannel } from "npm:discord.js@14.14.1";
 
 import { getGitInfo } from "./git/index.ts";
-import { createClaudeSender, expandableContent, sendToClaudeCode, convertToClaudeMessages, type DiscordSender, type ClaudeMessage, type SessionThreadCallbacks } from "./claude/index.ts";
+import { createClaudeSender, expandableContent, sendToClaudeCode, convertToClaudeMessages, type DiscordSender, type ClaudeMessage, type SessionThreadCallbacks, type ForumPostContext, type ForumPostFetcher } from "./claude/index.ts";
 import { buildQuestionMessages, parseAskUserButtonId, parseAskUserConfirmId, type AskUserQuestionInput } from "./claude/index.ts";
 import { buildPermissionEmbed, parsePermissionButtonId, type PermissionRequestCallback } from "./claude/index.ts";
 import { claudeCommands, enhancedClaudeCommands } from "./claude/index.ts";
@@ -185,6 +185,56 @@ export async function createClaudeCodeBot(config: BotConfig) {
     },
   };
 
+  // Fetches a Discord forum post's context using the bot's client. Closure
+  // over `bot` — the client isn't available until after createDiscordBot
+  // returns, but this callback is only invoked at /claude-forum runtime.
+  const fetchForumPost: ForumPostFetcher = async (channelId: string): Promise<ForumPostContext> => {
+    const client = bot?.client;
+    if (!client) throw new Error('Bot client not ready');
+
+    // deno-lint-ignore no-explicit-any
+    const channel: any = await client.channels.fetch(channelId);
+    if (!channel) throw new Error('Forum post not found (channel could not be fetched)');
+    if (!channel.isThread || !channel.isThread()) {
+      throw new Error('Selected channel is not a thread — only forum posts / threads are supported');
+    }
+
+    // Fetch starter message (the "body" of the forum post). May not exist if
+    // the starter was deleted.
+    // deno-lint-ignore no-explicit-any
+    let starterMessage: any = null;
+    try {
+      starterMessage = await channel.fetchStarterMessage();
+    } catch {
+      starterMessage = null;
+    }
+
+    // Fetch replies (Discord default limit is 50; bump to 100). For very long
+    // threads this won't cover everything — good enough for a first pass.
+    const fetched = await channel.messages.fetch({ limit: 100 });
+    // deno-lint-ignore no-explicit-any
+    const chronological = [...fetched.values()].sort((a: any, b: any) => a.createdTimestamp - b.createdTimestamp);
+
+    const starterId: string | undefined = starterMessage?.id;
+    const replies = chronological
+      // deno-lint-ignore no-explicit-any
+      .filter((m: any) => !starterId || m.id !== starterId)
+      // deno-lint-ignore no-explicit-any
+      .map((m: any) => ({
+        author: m.author?.username ?? m.author?.tag ?? 'unknown',
+        content: m.content ?? '',
+        timestamp: new Date(m.createdTimestamp).toISOString(),
+      }));
+
+    return {
+      title: channel.name ?? '(untitled forum post)',
+      forumName: channel.parent?.name ?? 'Unknown forum',
+      starterAuthor: starterMessage?.author?.username ?? starterMessage?.author?.tag ?? 'unknown',
+      starterContent: starterMessage?.content ?? '',
+      replies,
+    };
+  };
+
   // Late-bound AskUserQuestion handler — set after bot is created.
   // When Claude needs clarification mid-session, this sends buttons to Discord
   // and waits for the user's click.
@@ -246,6 +296,7 @@ export async function createClaudeCodeBot(config: BotConfig) {
         }
       },
       sessionThreads: sessionThreadCallbacks,
+      fetchForumPost,
     },
     {
       getController: () => claudeController,

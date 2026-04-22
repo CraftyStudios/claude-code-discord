@@ -28,7 +28,7 @@ import { agentCommand, createAgentHandlers } from "../agent/index.ts";
 import { screenshotCommands, createScreenshotHandlers } from "../screenshot/index.ts";
 import { infoCommands, createInfoCommandHandlers } from "../claude/index.ts";
 import { cleanSessionId, ClaudeSessionManager } from "../claude/index.ts";
-import type { SessionThreadCallbacks } from "../claude/index.ts";
+import type { SessionThreadCallbacks, ForumPostFetcher } from "../claude/index.ts";
 import type { ClaudeModelOptions } from "../claude/index.ts";
 import type { AskUserCallback } from "../claude/index.ts";
 import type { PermissionRequestCallback } from "../claude/index.ts";
@@ -181,6 +181,9 @@ export interface HandlerRegistryDeps {
   /** Thread-per-session callbacks (optional). When provided, each /claude
    *  invocation creates a dedicated Discord thread for its output. */
   sessionThreads?: SessionThreadCallbacks;
+  /** Fetches a Discord forum post's context for the /claude-forum command.
+   *  Late-bound from index.ts once the Discord client is available. */
+  fetchForumPost?: ForumPostFetcher;
 }
 
 /**
@@ -527,6 +530,7 @@ export function createAllHandlers(
     sendClaudeMessages,
     getQueryOptions,
     sessionThreads: deps.sessionThreads,
+    fetchForumPost: deps.fetchForumPost,
   });
 
   const gitHandlers = createGitHandlers({

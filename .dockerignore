@@ -1,0 +1,26 @@
+# Don't ship local git state into the image. In a git worktree, `.git` is a
+# file pointing at the main repo's worktree metadata, which breaks the
+# Dockerfile's `git init` step (the target path doesn't exist inside the
+# container). Excluding it also makes builds smaller and faster.
+.git
+.gitignore
+
+# Local state / scratch
+.env
+.env.local
+.env.*.local
+.bot-data/
+node_modules/
+deno.lock
+
+# Editor / OS cruft
+.vscode/
+.idea/
+.DS_Store
+
+# Worktrees & Claude Code internal state
+.claude/worktrees/
+
+# Build outputs
+dist/
+build/
